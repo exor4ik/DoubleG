@@ -2,7 +2,7 @@ const express = require('express');
 const { ExpressPeerServer } = require('peer');
 
 const app = express();
-// 🚨 КРИТИЧНО для Render: доверяем прокси, иначе WebSocket не установится
+// Критично для Render: доверяем заголовкам прокси
 app.enable('trust proxy'); 
 
 const port = process.env.PORT || 9000;
@@ -10,20 +10,21 @@ const server = app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Server listening on port ${port}`);
 });
 
-// ✅ ПРАВИЛЬНЫЙ СПОСОБ: указываем путь ВНУТРИ PeerServer и монтируем в КОРЕНЬ '/'
+// 1. Внутри PeerServer путь ВСЕГДА корневой '/'
 const peerServer = ExpressPeerServer(server, {
-  path: '/peerjs', 
+  path: '/',             // ← СТРОГО '/'
   allow_discovery: true,
-  proxied: true, // Обязательно для Render/Heroku
+  proxied: true,         // ← Обязательно для Render
+  debug: true,           // Включим логи, чтобы видеть подключения в Render
 });
 
-app.use('/', peerServer); // Монтируем в корень, ничего не обрезая!
+// 2. Монтируем его на '/peerjs' в Express
+app.use('/peerjs', peerServer);
 
-// Health check для UptimeRobot
+// Health checks для UptimeRobot
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'egor-peerjs' });
 });
-
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
