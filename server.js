@@ -1,51 +1,33 @@
 const express = require('express');
-const http = require('http');
-const { ExpressPeerServer } = require('peer');
 const cors = require('cors');
+const { AccessToken } = require('livekit-server-sdk');
 
 const app = express();
-const server = http.createServer(app);
+app.use(cors());
+app.use(express.json());
 
-// Render работает за reverse proxy
-app.enable('trust proxy');
+app.get('/', (req, res) => res.status(200).send('EgorNetwork Token Server OK'));
 
-// CORS обязателен для кросс-доменного WebSocket handshake
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.post('/token', async (req, res) => {
+  try {
+    const { roomName, participantName } = req.body;
+    if (!roomName || !participantName) return res.status(400).json({ error: 'Missing data' });
 
-// Health-check для Render
-app.get('/', (req, res) => {
-  res.json({ status: 'PeerJS OK', time: new Date().toISOString() });
+    const at = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, {
+      identity: participantName,
+    });
+
+    // Права на вход в комнату, публикацию и подписку на аудио
+    at.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true });
+
+    res.json({
+      token: at.toJwt(),
+      url: process.env.LIVEKIT_URL
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Token generation failed' });
+  }
 });
 
-// === PeerServer ===
-// path задаём ЗДЕСЬ. app.use(peerServer) — БЕЗ префикса, иначе пути разойдутся.
-const peerServer = ExpressPeerServer(server, {
-  path: '/myapp',
-  proxied: true,
-  debug: true,
-  alive_timeout: 120000,
-});
-
-app.use(peerServer);
-
-// Логирование (после peerServer, чтобы ловить и его запросы)
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} — ${req.ip || 'unknown'}`);
-  next();
-});
-
-const port = process.env.PORT || 10000;
-
-server.listen(port, '0.0.0.0', () => {
-  console.log(`Listening on ${port}`);
-});
-
-// Graceful shutdown для Render
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, closing...');
-  server.close(() => process.exit(0));
-});
+app.listen(process.env.PORT || 3000);
