@@ -1,30 +1,24 @@
 const express = require('express');
 const { ExpressPeerServer } = require('peer');
-
 const app = express();
-app.enable('trust proxy'); // Критично для Render
 
-const port = process.env.PORT || 9000;
+app.enable('trust proxy');
+
+const port = parseInt(process.env.PORT) || 9000;
 const server = app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Server listening on port ${port}`);
+  console.log(`🚀 PeerJS Server on port ${port}`);
 });
 
-// 🎯 ГЛАВНЫЙ СЕКРЕТ: Указываем ПОЛНЫЙ путь, который формирует клиент
+// Health check для Render
+app.get('/', (req, res) => res.send('PeerJS OK'));
+
 const peerServer = ExpressPeerServer(server, {
-  path: '/peer/peerjs',  // <--- Сервер принимает и HTTP, и WS на этом пути
-  allow_discovery: true,
+  path: '/peer/',   // ← БЕЗ 'peerjs' в конце! key добавится сам
   proxied: true,
   debug: true,
 });
 
-// Монтируем в корень, так как '/peer/peerjs' уже зашит внутрь peerServer
 app.use('/', peerServer);
 
-// Health check
-app.get('/', (req, res) => {
-  res.send('🚀 Egor PeerJS Server is running!');
-});
-
-peerServer.on('connection', (client) => {
-  console.log(`✅ Peer connected: ${client.getId()}`);
-});
+peerServer.on('connection', (c) => console.log(`✅ ${c.getId()}`));
+peerServer.on('disconnect', (c) => console.log(`🔌 ${c.getId()}`));
