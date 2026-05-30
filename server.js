@@ -6,36 +6,35 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 
-// Render.com работает за reverse proxy — обязательно
+// Render работает за reverse proxy
 app.enable('trust proxy');
 
-// CORS нужен для WebSocket handshake на кросс-домене
+// CORS обязателен для кросс-доменного WebSocket handshake
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Health-check
+// Health-check для Render
 app.get('/', (req, res) => {
   res.json({ status: 'PeerJS OK', time: new Date().toISOString() });
 });
 
 // === PeerServer ===
-// path задаём ЗДЕСЬ. app.use(peerServer) — без дополнительного префикса.
+// path задаём ЗДЕСЬ. app.use(peerServer) — БЕЗ префикса, иначе пути разойдутся.
 const peerServer = ExpressPeerServer(server, {
   path: '/myapp',
   proxied: true,
   debug: true,
-  // Можно увеличить, если Render рвёт соединения
   alive_timeout: 120000,
 });
 
 app.use(peerServer);
 
-// Логирование (после peerServer, чтобы ловить и его запросы тоже)
+// Логирование (после peerServer, чтобы ловить и его запросы)
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} — ${req.ip}`);
+  console.log(`${req.method} ${req.url} — ${req.ip || 'unknown'}`);
   next();
 });
 
